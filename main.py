@@ -11,7 +11,7 @@ app = Flask(__name__)
 JWTManager(app)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY")
-app.config["MONGO_URI"] = "mongodb+srv://gost:os.environ.get("pass")@cluster0.drav2vj.mongodb.net/flask_data?retryWrites=true&w=majority"
+app.config["MONGO_URI"] = f"mongodb+srv://gost:{os.environ.get("pass")}@cluster0.drav2vj.mongodb.net/flask_data?retryWrites=true&w=majority"
 
 client = PyMongo(app)
 db = client.db
