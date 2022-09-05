@@ -5,7 +5,7 @@ from flask_pymongo import PyMongo
 from flask import Flask,jsonify, request, make_response, Response
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt_header, create_refresh_token
 from bson.objectid import ObjectId
-
+import jwt
 
 app = Flask(__name__)
 JWTManager(app)
@@ -16,6 +16,35 @@ app.config["MONGO_URI"] = f"mongodb+srv://gost:{os.environ.get("pass")}@cluster0
 client = PyMongo(app)
 db = client.db
 
+
+# decorator for verifying the JWT
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        # jwt is passed in the request header
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+        # return 401 if token is not passed
+        if not token:
+            return jsonify({'message' : 'Token is missing !!'}), 401
+  
+        try:
+            # decoding the payload to fetch the stored details
+            # data = 
+            jwt.decode(token, app.config['SECRET_KEY'])
+            current_user = request.user
+            # User.query\
+            #     .filter_by(public_id = data['public_id'])\
+            #     .first()
+        except:
+            return jsonify({
+                'message' : 'Token is invalid !!'
+            }), 401
+        # returns the current logged in users contex to the routes
+        return  f(current_user, *args, **kwargs)
+  
+    return decorated
 
 @app.post("/register")
 def register():
@@ -45,9 +74,15 @@ def login():
   reg_user =db.user.find_one({"email":req_user})
   if reg_user:
         if reg_user.get("password") == req_pass:
+            token = jwt.encode({
+            'public_id': str(reg_user['_id']),
+            'exp' : str(datetime.utcnow() + timedelta(minutes = 2))
+        }, app.config['SECRET_KEY'])
+  
+            return make_response(jsonify({'token' : token}), 201)
               
-              return jsonify({"Success": "Successfully signed in",
-              })
+#               return jsonify({"Success": "Successfully signed in",
+#               })
         else :
               return jsonify({"error": "Wrong credentials"})
 
@@ -57,6 +92,7 @@ def login():
   
 
 @app.get("/template")
+@token_required
 def alltemplates():
       try:
         templates = list(db.template.find())
@@ -72,6 +108,7 @@ def alltemplates():
       )
 
 @app.put("/template/<template_id>")
+@token_required
 def get_template(template_id):
       try:
             db.template.find_one_and_replace({"_id":ObjectId(template_id),#serialize object id
@@ -90,6 +127,7 @@ def get_template(template_id):
 
 
 @app.delete("/delete/<template_id>")
+@token_required
 def delete_template(template_id):
       db.template.find_one_and_delete({"id":ObjectId(template_id)})
       try:
