@@ -52,7 +52,7 @@ def token_required(f):
     return decorated
 """Set a decorator function to check user auth"""
 def auth_req(f, **kwargs):
-    @wraps(f)
+    @wraps(f, **kwargs)
     def deco(*args, **kwargs):
         temp = json.dumps(db.template.find_one({"_id":ObjectId(kwargs["template_id"])}), default=str)
         temp = json.loads(temp)
