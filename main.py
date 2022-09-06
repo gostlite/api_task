@@ -27,7 +27,6 @@ def token_required(f):
         token = None
         # jwt is passed in the request header
 
-        """new lines again """
         if 'x-access-token' in token1:
             token = token1['x-access-token']
             # token['exp'] = int(token["exp"])
