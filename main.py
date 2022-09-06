@@ -1,11 +1,12 @@
 import json
 import os
 import secrets
+from functools import wraps
+from time import sleep
 from flask_pymongo import PyMongo
-from flask import Flask,jsonify, request, make_response, Response
-from flask_jwt_extended import JWTManager, create_access_token, get_jwt_header, create_refresh_token
-from bson.objectid import ObjectId
+from flask import Flask,jsonify, request, make_response, Response, redirect
 import jwt
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
 JWTManager(app)
@@ -17,14 +18,19 @@ client = PyMongo(app)
 db = client.db
 
 
+
+  
 # decorator for verifying the JWT
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
         # jwt is passed in the request header
-        if 'x-access-token' in request.headers:
-            token = request.headers['x-access-token']
+
+        """new lines again """
+        if 'x-access-token' in token1:
+            token = token1['x-access-token']
+            # token['exp'] = int(token["exp"])
         # return 401 if token is not passed
         if not token:
             return jsonify({'message' : 'Token is missing !!'}), 401
@@ -32,19 +38,38 @@ def token_required(f):
         try:
             # decoding the payload to fetch the stored details
             # data = 
-            jwt.decode(token, app.config['SECRET_KEY'])
-            current_user = request.user
+            data = jwt.decode(token, key=app.config['SECRET_KEY'], algorithms='HS256')
+            # current_user = db.user.find_one(data["public_id"])
             # User.query\
             #     .filter_by(public_id = data['public_id'])\
             #     .first()
         except:
             return jsonify({
-                'message' : 'Token is invalid !!'
+                'message' : 'Token is invalid !!',"token": jwt.decode(token, key=app.config['SECRET_KEY'], algorithms='HS256')
             }), 401
         # returns the current logged in users contex to the routes
-        return  f(current_user, *args, **kwargs)
+        return  f(*args, **kwargs)
   
     return decorated
+"""Set a decorator function to check user auth"""
+def auth_req(f, **kwargs):
+    @wraps(f)
+    def deco(*args, **kwargs):
+        temp = json.dumps(db.template.find_one({"_id":ObjectId(kwargs["template_id"])}), default=str)
+        temp = json.loads(temp)
+        # temp_owner = temp.get("template_owner")
+        # temp_owner = temp.get("template_owner")
+        if jwt.decode(token1["x-access-token"],key=app.config["SECRET_KEY"], algorithms='HS256')["public_id"] != temp["template_owner"]:
+            return jsonify({"message": "Sorry you cannot edit or delete this file","ERROR":"NOT OWNER"})
+        return f(*args, **kwargs)
+    return deco
+
+@app.route("/")
+def home():
+      return jsonify(response=json.dumps({"message": "Welcome here"\
+      "kindly register with /register, and login with /login, you cannot access\
+      the templates without login in"}), status=200, 
+      mimetype="applicatio/json")
 
 @app.post("/register")
 def register():
@@ -57,9 +82,8 @@ def register():
     # try:
     new_user = db.user.insert_one(dict(body)) 
     
-
     return Response(
-      response=json.dumps({"message": "new user created ","id":f"n{new_user.inserted_id}",
+      response=json.dumps({"message": "new user created ","id":f"{new_user.inserted_id}",
       "body": body }),
       status=200,
       mimetype="application/json"
@@ -67,6 +91,8 @@ def register():
 
 @app.post("/login")
 def login():
+  # user = request.authorization
+
 
 
   req_user = request.json.get("email")
@@ -76,22 +102,41 @@ def login():
         if reg_user.get("password") == req_pass:
             token = jwt.encode({
             'public_id': str(reg_user['_id']),
-            'exp' : str(datetime.utcnow() + timedelta(minutes = 2))
-        }, app.config['SECRET_KEY'])
+        }, app.config['SECRET_KEY'], algorithm='HS256')
+
+            """added new line"""
+            global token1
+            token1 = dict(request.headers)
+            token1["x-access-token"] = token
+
+           
   
-            return make_response(jsonify({'token' : token}), 201)
-              
-#               return jsonify({"Success": "Successfully signed in",
-#               })
+            return make_response(jsonify({'token' : token, "header": token1, 
+            "id": str(reg_user['_id']), "message": "You have successfully logged in"}), 201)
+        
+            #   return jsonify({"Success": f"Successfully signed in {str(reg_user['_id'])} ",
+            #   })
+
         else :
               return jsonify({"error": "Wrong credentials"})
 
   else:
         return jsonify({"error": "No matching email"})
-        
-  
 
-@app.get("/template")
+
+@app.post("/newtemplate")
+@token_required
+def new_temp():
+    # jwt.decode(token1["x-access-token"],key=app.config["SECRET_KEY"], algorithms='HS256')["public_id"],
+    template = {"template_name":request.json.get("template_name"),
+    "template_owner": jwt.decode(token1["x-access-token"],key=app.config["SECRET_KEY"], algorithms='HS256')["public_id"],
+    "subject": request.json.get("subject"),
+    "body":request.json.get("body")}
+    tempy = db.template.insert_one(template)
+    return jsonify({"title":template.get("template_owner")," body":f"successfully created a new template with id {tempy.inserted_id}"})
+    
+
+@app.route("/template")
 @token_required
 def alltemplates():
       try:
@@ -102,14 +147,18 @@ def alltemplates():
       except Exception:
         pass
        
+      # return jsonify({template for template in templates})
       return Response(response=json.dumps(templates),
       status=500,
       mimetype="application/json"
       )
 
+
 @app.put("/template/<template_id>")
 @token_required
+@auth_req
 def get_template(template_id):
+      # template_update = request.args.get("template_id")
       try:
             db.template.find_one_and_replace({"_id":ObjectId(template_id),#serialize object id
             "template_name":request.json.get("template_name"),
@@ -119,7 +168,7 @@ def get_template(template_id):
             pass
       finally:
             return Response(
-                  response=json.dumps({"message": "details updated for ","id":f"n{template_id}",
+                  response=json.dumps({"message": "details updated for ","id":f"{template_id}",
       "body": "updated" }),
       status=200,
       mimetype="application/json"
@@ -129,7 +178,7 @@ def get_template(template_id):
 @app.delete("/delete/<template_id>")
 @token_required
 def delete_template(template_id):
-      db.template.find_one_and_delete({"id":ObjectId(template_id)})
+      db.template.find_one_and_delete({"_id":ObjectId(template_id)})
       try:
         templates = list(db.template.find())
         for template in templates:
@@ -138,17 +187,18 @@ def delete_template(template_id):
       except Exception:
         pass
        
-      return Response(response=json.dumps({"Message":f"content of id {template_id} deleted successfully",
+      # return jsonify({template for template in templates})
+      Response(response=json.dumps({"Message":f"content of id {template_id} deleted successfully",
             "body":templates}),
       status=500,
       mimetype="application/json"
       )
-
-
-
-
+      import time
+      time.sleep(3)
+      return redirect("/template")
+      # return jsonify({"deleted succcessfully"})
 
 
 print(__name__)
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
