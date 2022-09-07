@@ -27,6 +27,7 @@ def token_required(f):
         token = None
         # jwt is passed in the request header
 
+        """new lines again """
         if 'x-access-token' in token1:
             token = token1['x-access-token']
             # token['exp'] = int(token["exp"])
@@ -65,19 +66,22 @@ def auth_req(f, **kwargs):
 
 @app.route("/")
 def home():
-      return jsonify(response=json.dumps({"message": "Welcome here"\
-      "kindly register with /register, and login with /login, you cannot access\
-      the templates without login in"}), status=200, 
-      mimetype="applicatio/json")
+      return jsonify(response=json.dumps({"message": "Welcome here!!! Pls use postman and body should be json"
+      "kindly register with /register, and login with /login, you cannot access"
+      "the templates without login in."}), status=200, 
+      mimetype="application/json")
 
 @app.post("/register")
 def register():
-    body = {
-    "first_name" : request.json.get("first_name"),
-    "last_name" : request.json.get("last_name"),
-    "email" :request.json.get("email"),
-    "password" : request.json.get("password")
-      }
+    try:
+        body = {
+        "first_name" : request.json.get("first_name"),
+        "last_name" : request.json.get("last_name"),
+        "email" :request.json.get("email"),
+        "password" : request.json.get("password")
+        }
+    except:
+        return json({"ERROR": "Pls use all key:{first_name, last_name, email and passwor}"})
     # try:
     new_user = db.user.insert_one(dict(body)) 
     
@@ -93,11 +97,13 @@ def login():
   # user = request.authorization
 
 
-
-  req_user = request.json.get("email")
-  req_pass = request.json.get("password")
-  reg_user =db.user.find_one({"email":req_user})
-  if reg_user:
+    try:
+        req_user = request.json.get("email")
+        req_pass = request.json.get("password")
+    except:
+        return jsonify({"ERROR":"Kindly use the keys {email and password to login}"})
+    reg_user =db.user.find_one({"email":req_user})
+    if reg_user:
         if reg_user.get("password") == req_pass:
             token = jwt.encode({
             'public_id': str(reg_user['_id']),
@@ -110,8 +116,10 @@ def login():
 
            
   
-            return make_response(jsonify({'token' : token, "header": token1, 
-            "id": str(reg_user['_id']), "message": "You have successfully logged in"}), 201)
+            return make_response(jsonify({ "message": "You have successfully logged in, use /template for all," 
+            "/newtemplate to add new template and /delete/<key>", "how to add template": "when adding a new template,"
+            "kindly use the key:{template_name, subject and body}using json" ,"header": token1, 
+            "id": str(reg_user['_id'])}), 201)
         
             #   return jsonify({"Success": f"Successfully signed in {str(reg_user['_id'])} ",
             #   })
@@ -119,7 +127,7 @@ def login():
         else :
               return jsonify({"error": "Wrong credentials"})
 
-  else:
+    else:
         return jsonify({"error": "No matching email"})
 
 
@@ -132,7 +140,7 @@ def new_temp():
     "subject": request.json.get("subject"),
     "body":request.json.get("body")}
     tempy = db.template.insert_one(template)
-    return jsonify({"title":template.get("template_owner")," body":f"successfully created a new template with id {tempy.inserted_id}"})
+    return jsonify({"Owner id":template.get("template_owner")," body":f"successfully created a new template with id {tempy.inserted_id}"})
     
 
 @app.route("/template")
@@ -176,6 +184,7 @@ def get_template(template_id):
 
 @app.delete("/delete/<template_id>")
 @token_required
+@auth_req
 def delete_template(template_id):
       db.template.find_one_and_delete({"_id":ObjectId(template_id)})
       try:
